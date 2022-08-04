@@ -17,14 +17,19 @@ using namespace mlir;
 using namespace mlir::arith;
 
 namespace {
-struct ConvertAddIOpToSubIOp : OpConversionPattern<AddIOp> {
-    using OpConversionPattern<AddIOp>::OpConversionPattern;
+struct ConvertAddIOpToSubIOp : public ConversionPattern {
 
-    LogicalResult matchAndRewrite (AddIOp op, AddIOpAdaptor adaptor,
-		    ConversionPatternRewriter &rw) const override {
-      rw.replaceOpWithNewOp<SubIOp>(op, op->getResultTypes(),
-                                    adaptor.getOperands(), op->getAttrs());
-    return success();
+    ConvertAddIOpToSubIOp (MLIRContext *ctx, PatternBenefit benefit = 1)
+	    : ConversionPattern(AddIOp::getOperationName(), benefit, ctx) {}
+
+    LogicalResult match(Operation *op) const final {
+      return cast<AddIOp>(op) ? success () : failure ();
+    }
+
+    void rewrite(Operation *op, ArrayRef<Value> operands,
+		    ConversionPatternRewriter &rewriter) const final {
+	    rewriter.replaceOpWithNewOp <SubIOp> (op, op->getResultTypes (),
+			    operands, op->getAttrs ());
     }
   };
 }
