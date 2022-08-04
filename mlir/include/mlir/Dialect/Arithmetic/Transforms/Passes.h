@@ -30,6 +30,9 @@ std::unique_ptr<Pass> createArithmeticExpandOpsPass();
 /// equivalent.
 std::unique_ptr<Pass> createArithmeticUnsignedWhenEquivalentPass();
 
+/// Sample pass.
+std::unique_ptr<Pass> createMyPass();
+
 //===----------------------------------------------------------------------===//
 // Registration
 //===----------------------------------------------------------------------===//

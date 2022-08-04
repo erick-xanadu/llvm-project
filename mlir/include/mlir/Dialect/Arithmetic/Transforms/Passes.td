@@ -49,4 +49,9 @@ def ArithmeticUnsignedWhenEquivalent : Pass<"arith-unsigned-when-equivalent"> {
   let constructor = "mlir::arith::createArithmeticUnsignedWhenEquivalentPass()";
 }
 
+def MyPass : Pass<"my-pass"> {
+  let summary = "All arithmetic additions become subtractions.";
+  let constructor = "mlir::arith::createMyPass()";
+}
+
 #endif // MLIR_DIALECT_ARITHMETIC_TRANSFORMS_PASSES
