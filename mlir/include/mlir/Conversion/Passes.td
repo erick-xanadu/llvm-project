@@ -93,6 +93,25 @@ def ConvertAMDGPUToROCDL : Pass<"convert-amdgpu-to-rocdl"> {
 }
 
 //===----------------------------------------------------------------------===//
+// ArithmeticToLinalg
+//===----------------------------------------------------------------------===//
+
+def ConvertArithmeticToLinalg : Pass<"convert-arith-to-linalg"> {
+  let summary = "Convert Arithmetic dialect to Linalg dialect";
+  let description = [{
+    This pass converts supported Arithmetic ops to Linalg dialect instructions.
+  }];
+  let constructor = "mlir::arith::createConvertArithmeticToLinalgPass()";
+  let dependentDialects = [
+    "arith::ArithmeticDialect",
+    "cf::ControlFlowDialect",
+    "linalg::LinalgDialect",
+    "tensor::TensorDialect"
+  ];
+  let options = [];
+}
+
+//===----------------------------------------------------------------------===//
 // ArithmeticToLLVM
 //===----------------------------------------------------------------------===//
 
