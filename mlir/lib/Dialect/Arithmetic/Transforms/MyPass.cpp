@@ -16,6 +16,8 @@
 using namespace mlir;
 using namespace mlir::arith;
 
+static bool isaTensor(Type t) { return t.isa<TensorType>(); }
+
 namespace {
 struct ConvertAddIOpToSubIOp : public ConversionPattern {
 
@@ -23,7 +25,12 @@ struct ConvertAddIOpToSubIOp : public ConversionPattern {
 	    : ConversionPattern(AddIOp::getOperationName(), benefit, ctx) {}
 
     LogicalResult match(Operation *op) const final {
-      return cast<AddIOp>(op) ? success () : failure ();
+      bool isAddIOp = cast <AddIOp> (op);
+      if (!isAddIOp) return failure ();
+
+      // Check for the operands
+      bool hasTensorResult = any_of(op->getResultTypes(), isaTensor);
+      return hasTensorResult ? success () : failure ();
     }
 
     void rewrite(Operation *op, ArrayRef<Value> operands,
@@ -43,7 +50,8 @@ struct MyPass
     MLIRContext *ctx = op->getContext();
     ConversionTarget target(*ctx);
     target.addLegalDialect<ArithmeticDialect>();
-    target.addIllegalOp<AddIOp>();
+    target.addDynamicallyLegalOp<AddIOp>([&](Operation *op) {
+		    return !any_of (op->getResultTypes (), isaTensor); });
     RewritePatternSet patterns(ctx);
     patterns.add<ConvertAddIOpToSubIOp>(ctx);
 
