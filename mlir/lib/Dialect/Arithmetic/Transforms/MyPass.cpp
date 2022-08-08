@@ -298,6 +298,9 @@ struct MyPass : public MyPassBase<MyPass> {
     target.addDynamicallyLegalOp<TruncFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<TruncIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<XOrIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -343,7 +346,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<SubFOp>>(ctx);
     patterns.add<PointwiseConverter<SubIOp>>(ctx);
     patterns.add<PointwiseConverter<TruncFOp>>(ctx);
-    // trunci
+    patterns.add<PointwiseConverter<TruncIOp>>(ctx);
     // uitofp
     patterns.add<PointwiseConverter<XOrIOp>>(ctx);
     // select
