@@ -199,6 +199,9 @@ struct MyPass : public MyPassBase<MyPass> {
     target.addDynamicallyLegalOp<AndIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<BitcastOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<CeilDivSIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -313,7 +316,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<AddFOp>>(ctx);
     patterns.add<PointwiseConverter<AddIOp>>(ctx);
     patterns.add<PointwiseConverter<AndIOp>>(ctx);
-    // bitcast
+    patterns.add<PointwiseConverter<BitcastOp>>(ctx);
     patterns.add<PointwiseConverter<CeilDivSIOp>>(ctx);
     patterns.add<PointwiseConverter<CeilDivUIOp>>(ctx);
     patterns.add<PointwiseConverter<CmpFOp>>(ctx);

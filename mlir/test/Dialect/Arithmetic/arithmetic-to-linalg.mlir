@@ -28,6 +28,15 @@ module {
     return %0 : tensor<4x4xi32>
   }
 
+  func.func @transformbitcast (%arg0: tensor<4x4xf32>) -> tensor<4x4xi32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.bitcast %arg0 : tensor<4x4xf32> to tensor<4x4xi32>
+// CHECK: %2 = arith.bitcast %arg1 : f32 to i32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xi32>
+  }
+
   func.func @transformceildivsi (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
