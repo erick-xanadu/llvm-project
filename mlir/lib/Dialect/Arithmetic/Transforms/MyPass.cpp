@@ -31,41 +31,25 @@ static SmallVector<Value> condenseValues(const SmallVector<Value> &values) {
   return condensedValues;
 }
 
+template <typename SrcOp>
 static Value
 createLinalgBodyCalculationForElementwiseOp(Operation *op, ValueRange args,
                                             ArrayRef<Type> resultTypes,
                                             PatternRewriter &rewriter) {
   Location loc = op->getLoc();
-  auto elementTy =
-      op->getOperand(0).getType().cast<ShapedType>().getElementType();
 
-  if (isa<arith::AddIOp>(op) && elementTy.isa<IntegerType>())
-    return rewriter.create<arith::AddIOp>(loc, resultTypes, args);
+  if (isa<SrcOp>(op))
+    return rewriter.create<SrcOp>(loc, resultTypes, args);
 
   return nullptr;
 }
 
 static bool isaTensor(Type t) { return t.isa<TensorType>(); }
 
-namespace {
-struct ConvertAddIOpToSubIOp : public ConversionPattern {
-
-  ConvertAddIOpToSubIOp(MLIRContext *ctx, PatternBenefit benefit = 1)
-      : ConversionPattern(AddIOp::getOperationName(), benefit, ctx) {}
-
-  LogicalResult match(Operation *op) const final {
-    bool isAddIOp = cast<AddIOp>(op);
-    if (!isAddIOp)
-      return failure();
-
-    // Check for the operands
-    bool hasTensorResult = any_of(op->getResultTypes(), isaTensor);
-    return hasTensorResult ? success() : failure();
-  }
-
-  void rewrite(Operation *op, ArrayRef<Value> operands,
-               ConversionPatternRewriter &rewriter) const final {
-
+template <typename SrcOp>
+static LogicalResult
+elementwiseMatchAndRewriteHelper(Operation *op,
+                                 PatternRewriter &rewriter) {
     auto loc = op->getLoc();
 
     assert(op->getNumResults() == 1 &&
@@ -148,7 +132,7 @@ struct ConvertAddIOpToSubIOp : public ConversionPattern {
         getNParallelLoopsAttrs(rank),
         [&](OpBuilder &nestedBuilder, Location nestedLoc,
             ValueRange blockArgs) {
-          Value opResult = createLinalgBodyCalculationForElementwiseOp(
+          Value opResult = createLinalgBodyCalculationForElementwiseOp<SrcOp>(
               op, blockArgs.take_front(op->getNumOperands()), bodyResultTypes,
               rewriter);
           if (!opResult) {
@@ -161,6 +145,24 @@ struct ConvertAddIOpToSubIOp : public ConversionPattern {
     assert(!didEncounterError && "Must not encounter errors");
 
     rewriter.replaceOp(op, linalgOp->getResults());
+    return success ();
+}
+
+namespace {
+template <typename SrcOp>
+struct PointwiseConverter : public OpRewritePattern <SrcOp> {
+
+  using OpRewritePattern<SrcOp>::OpRewritePattern;
+
+
+  LogicalResult matchAndRewrite(SrcOp op, 
+               PatternRewriter &rewriter) const final {
+
+    bool hasTensorResult = any_of(op->getResultTypes(), isaTensor);
+    if (!hasTensorResult)
+	    return failure ();
+
+    return elementwiseMatchAndRewriteHelper<SrcOp> (op, rewriter);
   }
 };
 } // namespace
@@ -177,11 +179,140 @@ struct MyPass : public MyPassBase<MyPass> {
     MLIRContext *ctx = op->getContext();
     ConversionTarget target(*ctx);
     target.addLegalDialect<ArithmeticDialect, LinalgDialect>();
+
+    target.addDynamicallyLegalOp<AddFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<AddIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<AndIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<CeilDivSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<CeilDivUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<CmpFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<CmpIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<DivFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<DivSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<DivUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<FloorDivSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MaxFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MaxSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MaxUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MinFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MinSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MinUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MulFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<MulIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<OrIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<RemFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<RemSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<RemUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<ShLIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<ShRSIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<ShRUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<SubFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<SubIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+    target.addDynamicallyLegalOp<XOrIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
+
     RewritePatternSet patterns(ctx);
-    patterns.add<ConvertAddIOpToSubIOp>(ctx);
+
+    patterns.add<PointwiseConverter<AddFOp>>(ctx);
+    patterns.add<PointwiseConverter<AddIOp>>(ctx);
+    patterns.add<PointwiseConverter<AndIOp>>(ctx);
+    // bitcast
+    patterns.add<PointwiseConverter<CeilDivSIOp>>(ctx);
+    patterns.add<PointwiseConverter<CeilDivUIOp>>(ctx);
+    patterns.add<PointwiseConverter<CmpFOp>>(ctx);
+    patterns.add<PointwiseConverter<CmpIOp>>(ctx);
+    // constant
+    patterns.add<PointwiseConverter<DivFOp>>(ctx);
+    patterns.add<PointwiseConverter<DivSIOp>>(ctx);
+    patterns.add<PointwiseConverter<DivUIOp>>(ctx);
+    // extf
+    // extsi
+    // extui
+    // fptosi
+    // fptoui
+    patterns.add<PointwiseConverter<FloorDivSIOp>>(ctx);
+    // index cast
+    patterns.add<PointwiseConverter<MaxFOp>>(ctx);
+    patterns.add<PointwiseConverter<MaxSIOp>>(ctx);
+    patterns.add<PointwiseConverter<MaxUIOp>>(ctx);
+    patterns.add<PointwiseConverter<MinFOp>>(ctx);
+    patterns.add<PointwiseConverter<MinSIOp>>(ctx);
+    patterns.add<PointwiseConverter<MinUIOp>>(ctx);
+    patterns.add<PointwiseConverter<MulFOp>>(ctx);
+    patterns.add<PointwiseConverter<MulIOp>>(ctx);
+    // negfop
+    patterns.add<PointwiseConverter<OrIOp>>(ctx);
+    patterns.add<PointwiseConverter<RemFOp>>(ctx);
+    patterns.add<PointwiseConverter<RemSIOp>>(ctx);
+    patterns.add<PointwiseConverter<RemUIOp>>(ctx);
+    // sitofp
+    patterns.add<PointwiseConverter<ShLIOp>>(ctx);
+    patterns.add<PointwiseConverter<ShRSIOp>>(ctx);
+    patterns.add<PointwiseConverter<ShRUIOp>>(ctx);
+    patterns.add<PointwiseConverter<SubFOp>>(ctx);
+    patterns.add<PointwiseConverter<SubIOp>>(ctx);
+    // truncf
+    // trunci
+    // uitofp
+    patterns.add<PointwiseConverter<XOrIOp>>(ctx);
+    // select
 
     if (failed(applyPartialConversion(op, target, std::move(patterns)))) {
       signalPassFailure();
