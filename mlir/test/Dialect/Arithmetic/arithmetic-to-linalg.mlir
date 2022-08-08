@@ -316,6 +316,15 @@ module {
     return %0 : tensor<4x4xi32>
   }
 
+  func.func @transformtruncf (%arg0: tensor<4x4xf64>) -> tensor<4x4xf32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.truncf %arg0 : tensor<4x4xf64> to tensor<4x4xf32>
+// CHECK: %2 = arith.truncf %arg1 : f64 to f32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xf32>
+  }
+
   func.func @transformxori (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
