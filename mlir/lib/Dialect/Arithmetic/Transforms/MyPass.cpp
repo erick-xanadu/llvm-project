@@ -232,6 +232,9 @@ struct MyPass : public MyPassBase<MyPass> {
     target.addDynamicallyLegalOp<FPToSIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<FPToUIOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<FloorDivSIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -308,7 +311,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<ExtSIOp>>(ctx);
     patterns.add<PointwiseConverter<ExtUIOp>>(ctx);
     patterns.add<PointwiseConverter<FPToSIOp>>(ctx);
-    // fptoui
+    patterns.add<PointwiseConverter<FPToUIOp>>(ctx);
     patterns.add<PointwiseConverter<FloorDivSIOp>>(ctx);
     // index cast: Implemented by someone else
     patterns.add<PointwiseConverter<MaxFOp>>(ctx);
