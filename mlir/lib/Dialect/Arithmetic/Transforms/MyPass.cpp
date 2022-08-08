@@ -277,6 +277,9 @@ struct MyPass : public MyPassBase<MyPass> {
     target.addDynamicallyLegalOp<RemUIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<SIToFPOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<ShLIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -330,6 +333,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<RemFOp>>(ctx);
     patterns.add<PointwiseConverter<RemSIOp>>(ctx);
     patterns.add<PointwiseConverter<RemUIOp>>(ctx);
+    patterns.add<PointwiseConverter<SIToFPOp>>(ctx);
     // sitofp
     patterns.add<PointwiseConverter<ShLIOp>>(ctx);
     patterns.add<PointwiseConverter<ShRSIOp>>(ctx);

@@ -262,6 +262,15 @@ module {
     return %0 : tensor<4x4xi32>
   }
 
+  func.func @transformsitofp (%arg0: tensor<4x4xi32>) -> tensor<4x4xf32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.sitofp %arg0 : tensor<4x4xi32> to tensor<4x4xf32>
+// CHECK: %2 = arith.sitofp %arg1 : i32 to f32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xf32>
+  }
+
   func.func @transformshli (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
