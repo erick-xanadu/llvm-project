@@ -217,5 +217,14 @@ module {
     return %0 : tensor<4x4xi32>
   }
 
+  func.func @transformsubf (%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xf32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.subf %arg0, %arg1 : tensor<4x4xf32>
+// CHECK: %2 = arith.subf %arg2, %arg3 : f32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xf32>
+  }
+
 }
 
