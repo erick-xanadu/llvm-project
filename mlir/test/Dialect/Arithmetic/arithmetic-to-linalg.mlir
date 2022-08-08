@@ -55,6 +55,15 @@ module {
     return %0 : tensor<4x4xi1>
   }
 
+  func.func @transformcmpi (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi1> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.cmpi sge, %arg0, %arg1 : tensor<4x4xi32>
+// CHECK: %2 = arith.cmpi sge, %arg2, %arg3 : i32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xi1>
+  }
+
   func.func @transformdivf (%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xf32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
