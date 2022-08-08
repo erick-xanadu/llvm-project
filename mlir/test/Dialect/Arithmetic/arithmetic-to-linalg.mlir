@@ -18,5 +18,14 @@ module {
 // CHECK: linalg.yield
     return %0 : tensor<4x4xi32>
   }
+
+  func.func @transformandi (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.andi %arg0, %arg1 : tensor<4x4xi32>
+// CHECK: %2 = arith.andi %arg2, %arg3 : i32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xi32>
+  }
 }
 
