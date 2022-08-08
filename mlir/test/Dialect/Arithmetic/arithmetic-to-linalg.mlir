@@ -45,5 +45,14 @@ module {
 // CHECK: linalg.yield
     return %0 : tensor<4x4xi32>
   }
+
+  func.func @transformdivf (%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xf32> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.divf %arg0, %arg1 : tensor<4x4xf32>
+// CHECK: %2 = arith.divf %arg2, %arg3 : f32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xf32>
+  }
 }
 
