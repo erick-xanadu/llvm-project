@@ -38,6 +38,13 @@ createLinalgBodyCalculationForElementwiseOp(Operation *op, ValueRange args,
                                             PatternRewriter &rewriter) {
   Location loc = op->getLoc();
 
+  if (isa<arith::CmpFOp>(op))
+  {
+    CmpFOp cmpfop = cast<arith::CmpFOp> (op);
+    auto retval = rewriter.create<CmpFOp>(loc, cmpfop.getPredicate(), args[0], args[1]);
+    return retval;
+  }
+
   if (isa<SrcOp>(op))
     return rewriter.create<SrcOp>(loc, resultTypes, args);
 
@@ -195,6 +202,9 @@ struct MyPass : public MyPassBase<MyPass> {
     target.addDynamicallyLegalOp<CeilDivUIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    target.addDynamicallyLegalOp<CmpFOp>([&](Operation *op) {
+      return !any_of(op->getResultTypes(), isaTensor);
+    });
     target.addDynamicallyLegalOp<DivFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -270,7 +280,7 @@ struct MyPass : public MyPassBase<MyPass> {
     // bitcast
     patterns.add<PointwiseConverter<CeilDivSIOp>>(ctx);
     patterns.add<PointwiseConverter<CeilDivUIOp>>(ctx);
-    // patterns.add<PointwiseConverter<CmpFOp>>(ctx);
+    patterns.add<PointwiseConverter<CmpFOp>>(ctx);
     // patterns.add<PointwiseConverter<CmpIOp>>(ctx);
     // constant
     patterns.add<PointwiseConverter<DivFOp>>(ctx);

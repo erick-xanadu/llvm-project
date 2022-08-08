@@ -46,6 +46,15 @@ module {
     return %0 : tensor<4x4xi32>
   }
 
+  func.func @transformcmpf (%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xi1> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.cmpf ogt, %arg0, %arg1 : tensor<4x4xf32>
+// CHECK: %2 = arith.cmpf ogt, %arg2, %arg3 : f32
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xi1>
+  }
+
   func.func @transformdivf (%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xf32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
