@@ -100,6 +100,15 @@ module {
     return %0 : tensor<4x4xf64>
   }
 
+  func.func @transformextsi (%arg0: tensor<4x4xi32>) -> tensor<4x4xi64> {
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.extsi %arg0 : tensor<4x4xi32> to tensor<4x4xi64>
+// CHECK: %2 = arith.extsi %arg1 : i32 to i64
+// CHECK: linalg.yield
+    return %0 : tensor<4x4xi64>
+  }
+
   func.func @transformfloordivsi (%arg0: tensor<4x4xi32>, %arg1: tensor<4x4xi32>) -> tensor<4x4xi32> {
 // CHECK: linalg.init_tensor
 // CHECK: linalg.generic
