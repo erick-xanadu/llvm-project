@@ -87,6 +87,9 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
   SmallVector<Type> opResultTypes;
   SmallVector<Value> initTensors;
 
+  SmallVector<Value> dynDims;
+  dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
+
   assert (operation->getOperand (0) && "There must be at least one operand.");
   auto arg0 = operation->getOperand (0);
   auto arg0Rank = arg0.getType().cast<ShapedType>().getRank ();
@@ -96,56 +99,45 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
     assert (arg0Rank == operandRank && "All operands must match in rank.");
   }
 
-  bool areThereDynamicSizedDimensions = false;
-  for (auto arg : operation->getOperands()) {
-    auto operandTy = arg.getType().cast<ShapedType>();
-    for (int i = 0; i < operandTy.getRank(); i++) 
-      areThereDynamicSizedDimensions |= operandTy.isDynamicDim(i);
-  }
-
-  if (areThereDynamicSizedDimensions) {
-    SmallVector<SmallVector<Value>> operandsDimensions;
-    operandsDimensions.resize (operation->getNumOperands ());
-
-    // We are going to emit operations that might not be necessary for
-    // statically sized tensors. However, all of this should be removed
-    // by dead code elimination
-    int i = 0;
-    for (auto &operand : operandsDimensions) {
-      operand.resize (arg0Rank);
-      auto arg = operation->getOperand (i);
-      for (int j = 0; j < arg0Rank; j++) {
-        operand[j] = rewriter.create<tensor::DimOp>(loc, arg, j);
-      }
-      i++;
+  for (int i = 0; i < arg0Rank; i++) {
+    bool isCurrentDimensionDynamic = false;
+    for (auto arg: operation->getOperands ()) {
+      auto operandTy = arg.getType().cast<ShapedType>();
+      isCurrentDimensionDynamic |= operandTy.isDynamicDim (i);
     }
 
-    // Assert that all dimensions are the same
-    // even if they are static. The canonicalization pass
-    // can get rid of statically known comparisons.
-    for (int i = 0; i < arg0Rank; i++) {
-      auto zerothOperandIthDimension = operandsDimensions[0][i];
-      int j = 0;
-      for (auto &operand : operandsDimensions) {
-        if (j == 0) {
-	  j++;
-          continue;
-        }
-        j++;
-        auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothOperandIthDimension, operand[i]);
+    // Either operand could be dynamic
+    if (isCurrentDimensionDynamic) {
+      // We need to create a constant integer index
+      // that will allow us to use the DimOp operator...
+      auto indexVal = rewriter.create<arith::ConstantOp> (loc, rewriter.getIndexType (), rewriter.getIntegerAttr(rewriter.getIndexType (), i));
+      SmallVector<Value> dimensionsToCompare;
+      dimensionsToCompare.resize (operation->getNumOperands ());
+
+      // Which are the dimensions to compare?
+      unsigned int j = 0;
+      for (auto arg: operation->getOperands ()) {
+        dimensionsToCompare[j] = rewriter.create<tensor::DimOp>(loc, arg, indexVal);
+	j++;
+      }
+
+      // Get the zeroth dimension size
+      j = 0;
+      auto zerothDimensionToCompare = dimensionsToCompare[j++];
+
+      // Re-use this DimOp for the initTensors.
+      // If the results are not equal, it won't matter since
+      // we will hit the assertion.
+      if (!dynDims[i]) {
+        dynDims[i] = zerothDimensionToCompare;
+      }
+
+      for (; j < operation->getNumOperands (); j++)
+      {
+        auto jthDimensionToCompare = dimensionsToCompare[j];
+        auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothDimensionToCompare, jthDimensionToCompare);
         rewriter.create<mlir::cf::AssertOp>(loc, value, rewriter.getStringAttr(
 			                          "Dimensions have to be same size."));
-      }
-    }
-  }
-
-  SmallVector<Value> dynDims;
-  dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
-  for (auto arg : operation->getOperands()) {
-    auto operandTy = arg.getType().cast<ShapedType>();
-    for (int i = 0; i < operandTy.getRank(); i++) {
-      if (operandTy.isDynamicDim(i) && !dynDims[i]) {
-        dynDims[i] = rewriter.create<tensor::DimOp>(loc, arg, i);
       }
     }
   }
