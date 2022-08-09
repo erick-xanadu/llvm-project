@@ -96,38 +96,46 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
     assert (arg0Rank == operandRank && "All operands must match in rank.");
   }
 
-
-  SmallVector<SmallVector<Value>> operandsDimensions;
-  operandsDimensions.resize (operation->getNumOperands ());
-
-  // We are going to emit operations that might not be necessary for
-  // statically sized tensors. However, all of this should be removed
-  // by dead code elimination
-  int i = 0;
-  for (auto &operand : operandsDimensions) {
-    operand.resize (arg0Rank);
-    auto arg = operation->getOperand (i);
-    for (int j = 0; j < arg0Rank; j++) {
-        operand[j] = rewriter.create<tensor::DimOp>(loc, arg, j);
-    }
-    i++;
+  bool areThereDynamicSizedDimensions = false;
+  for (auto arg : operation->getOperands()) {
+    auto operandTy = arg.getType().cast<ShapedType>();
+    for (int i = 0; i < operandTy.getRank(); i++) 
+      areThereDynamicSizedDimensions |= operandTy.isDynamicDim(i);
   }
 
-  // Assert that all dimensions are the same
-  // even if they are static. The canonicalization pass
-  // can get rid of statically known comparisons.
-  for (int i = 0; i < arg0Rank; i++) {
-    auto zerothOperandIthDimension = operandsDimensions[0][i];
-    int j = 0;
+  if (areThereDynamicSizedDimensions) {
+    SmallVector<SmallVector<Value>> operandsDimensions;
+    operandsDimensions.resize (operation->getNumOperands ());
+
+    // We are going to emit operations that might not be necessary for
+    // statically sized tensors. However, all of this should be removed
+    // by dead code elimination
+    int i = 0;
     for (auto &operand : operandsDimensions) {
-      if (j == 0) {
-	 j++;
-         continue;
+      operand.resize (arg0Rank);
+      auto arg = operation->getOperand (i);
+      for (int j = 0; j < arg0Rank; j++) {
+        operand[j] = rewriter.create<tensor::DimOp>(loc, arg, j);
       }
-      j++;
-      auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothOperandIthDimension, operand[i]);
-      rewriter.create<mlir::cf::AssertOp>(loc, value, rewriter.getStringAttr(
+      i++;
+    }
+
+    // Assert that all dimensions are the same
+    // even if they are static. The canonicalization pass
+    // can get rid of statically known comparisons.
+    for (int i = 0; i < arg0Rank; i++) {
+      auto zerothOperandIthDimension = operandsDimensions[0][i];
+      int j = 0;
+      for (auto &operand : operandsDimensions) {
+        if (j == 0) {
+	  j++;
+          continue;
+        }
+        j++;
+        auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothOperandIthDimension, operand[i]);
+        rewriter.create<mlir::cf::AssertOp>(loc, value, rewriter.getStringAttr(
 			                          "Dimensions have to be same size."));
+      }
     }
   }
 
@@ -141,7 +149,6 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
       }
     }
   }
-
 
   SmallVector<Value> filteredDims = condenseValues(dynDims);
 
