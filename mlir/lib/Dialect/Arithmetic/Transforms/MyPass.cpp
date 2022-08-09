@@ -11,6 +11,7 @@
 #include "PassDetail.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/TypeUtilities.h"
@@ -20,6 +21,7 @@ using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::linalg;
 using namespace mlir::tensor;
+using namespace mlir::cf;
 
 static SmallVector<StringRef> getNParallelLoopsAttrs(unsigned nParallelLoops) {
   return SmallVector<StringRef>(nParallelLoops, getParallelIteratorTypeName());
@@ -85,9 +87,52 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
   SmallVector<Type> opResultTypes;
   SmallVector<Value> initTensors;
 
+  assert (operation->getOperand (0) && "There must be at least one operand.");
+  auto arg0 = operation->getOperand (0);
+  auto arg0Rank = arg0.getType().cast<ShapedType>().getRank ();
+  for (auto arg : operation->getOperands ())
+  {
+    auto operandRank = arg.getType().cast<ShapedType>().getRank ();
+    assert (arg0Rank == operandRank && "All operands must match in rank.");
+  }
+
+
+  SmallVector<SmallVector<Value>> operandsDimensions;
+  operandsDimensions.resize (operation->getNumOperands ());
+
+  // We are going to emit operations that might not be necessary for
+  // statically sized tensors. However, all of this should be removed
+  // by dead code elimination
+  int i = 0;
+  for (auto &operand : operandsDimensions) {
+    operand.resize (arg0Rank);
+    auto arg = operation->getOperand (i);
+    for (int j = 0; j < arg0Rank; j++) {
+        operand[j] = rewriter.create<tensor::DimOp>(loc, arg, j);
+    }
+    i++;
+  }
+
+  // Assert that all dimensions are the same
+  // even if they are static. The canonicalization pass
+  // can get rid of statically known comparisons.
+  for (int i = 0; i < arg0Rank; i++) {
+    auto zerothOperandIthDimension = operandsDimensions[0][i];
+    int j = 0;
+    for (auto &operand : operandsDimensions) {
+      if (j == 0) {
+	 j++;
+         continue;
+      }
+      j++;
+      auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothOperandIthDimension, operand[i]);
+      rewriter.create<mlir::cf::AssertOp>(loc, value, rewriter.getStringAttr(
+			                          "Dimensions have to be same size."));
+    }
+  }
+
   SmallVector<Value> dynDims;
   dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
-
   for (auto arg : operation->getOperands()) {
     auto operandTy = arg.getType().cast<ShapedType>();
     for (int i = 0; i < operandTy.getRank(); i++) {
@@ -96,6 +141,7 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
       }
     }
   }
+
 
   SmallVector<Value> filteredDims = condenseValues(dynDims);
 
@@ -191,14 +237,14 @@ namespace {
 struct MyPass : public MyPassBase<MyPass> {
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<linalg::LinalgDialect, tensor::TensorDialect>();
+    registry.insert<linalg::LinalgDialect, tensor::TensorDialect, cf::ControlFlowDialect>();
   }
 
   void runOnOperation() override {
     Operation *op = getOperation();
     MLIRContext *ctx = op->getContext();
     ConversionTarget target(*ctx);
-    target.addLegalDialect<ArithmeticDialect, LinalgDialect, TensorDialect>();
+    target.addLegalDialect<ArithmeticDialect, LinalgDialect, TensorDialect, ControlFlowDialect>();
 
     target.addDynamicallyLegalOp<AddFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
