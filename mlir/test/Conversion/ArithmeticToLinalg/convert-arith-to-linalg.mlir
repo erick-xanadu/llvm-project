@@ -371,5 +371,16 @@ module {
     return %0 : tensor<?x4xf32>
   }
 
+  func.func @transformaddfdynamic2(%arg0: tensor<?x?xf32>, %arg1: tensor<?x?xf32>) -> tensor<?x?xf32> {
+// CHECK: tensor.dim
+// CHECK: tensor.dim
+// CHECK: linalg.init_tensor
+// CHECK: linalg.generic
+    %0 = arith.addf %arg0, %arg1 : tensor<?x?xf32>
+// CHECK: arith.addf %arg2, %arg3 : f32
+// CHECK: linalg.yield
+    return %0 : tensor<?x?xf32>
+  }
+
 }
 
