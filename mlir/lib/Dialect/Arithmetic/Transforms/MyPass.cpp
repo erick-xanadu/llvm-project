@@ -12,12 +12,14 @@
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
 #include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 using namespace mlir;
 using namespace mlir::arith;
 using namespace mlir::linalg;
+using namespace mlir::tensor;
 
 static SmallVector<StringRef> getNParallelLoopsAttrs(unsigned nParallelLoops) {
   return SmallVector<StringRef>(nParallelLoops, getParallelIteratorTypeName());
@@ -58,104 +60,112 @@ static bool isaTensor(Type t) { return t.isa<TensorType>(); }
 
 template <typename SrcOp>
 static LogicalResult
-elementwiseMatchAndRewriteHelper(Operation *op,
+elementwiseMatchAndRewriteHelper(Operation *operation,
                                  PatternRewriter &rewriter) {
-    auto loc = op->getLoc();
+  auto loc = operation->getLoc();
 
-    assert(op->getNumResults() == 1 &&
-           "All elementwise ops should only return a single result.");
+  assert(operation->getNumResults() == 1 &&
+         "All arith elementwise ops should only return a single result.");
 
-    auto results = op->getResults();
-    auto resultTy = op->getResult(0).getType().dyn_cast<ShapedType>();
-    assert(resultTy && "All results must be a shaped type");
+  auto results = operation->getResults();
+  auto resultTy = operation->getResult(0).getType().dyn_cast<ShapedType>();
 
-    unsigned rank = resultTy.getRank();
+  if (!resultTy)
+    return rewriter.notifyMatchFailure(operation,
+                                       "All results must be a shaped type");
 
-    // Construct the indexing maps needed for linalg.generic ops.
-    SmallVector<Type> bodyArgTypes;
+  unsigned rank = resultTy.getRank();
 
-    for (Value in : op->getOperands())
-      bodyArgTypes.emplace_back(getElementTypeOrSelf(in.getType()));
+  // Construct the indexing maps needed for linalg.generic ops.
+  SmallVector<Type> bodyArgTypes;
 
-    SmallVector<Type> opResultTypes;
-    SmallVector<Value> initTensors;
+  for (Value in : operation->getOperands())
+    bodyArgTypes.emplace_back(getElementTypeOrSelf(in.getType()));
 
-    SmallVector<Value> dynDims;
-    dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
+  SmallVector<Type> opResultTypes;
+  SmallVector<Value> initTensors;
 
-    for (auto arg : op->getOperands()) {
-      auto operandTy = arg.getType().cast<ShapedType>();
-      for (int i = 0; i < operandTy.getRank(); i++)
-	assert (!operandTy.isDynamicDim (i) && "Dimensions cannot be dynamic yet");
-    }
+  SmallVector<Value> dynDims;
+  dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
 
-    SmallVector<Value> filteredDims = condenseValues(dynDims);
-
-    for (auto result : results) {
-      auto resultTy = result.getType().template cast<ShapedType>();
-      initTensors.push_back(rewriter.create<linalg::InitTensorOp>(
-          loc, filteredDims, resultTy.getShape(), resultTy.getElementType()));
-      opResultTypes.push_back(result.getType());
-    }
-
-    auto bodyResultTypes = llvm::to_vector<4>(llvm::map_range(
-        initTensors, [](Value v) { return getElementTypeOrSelf(v); }));
-
-    SmallVector<Value, 2> operands2;
-    SmallVector<AffineMap, 3> indexingMaps;
-    indexingMaps.reserve(op->getNumOperands() + bodyResultTypes.size());
-
-    // Input indexing maps may be broadcasted.
-    for (Value operand : op->getOperands()) {
-      ShapedType type = operand.getType().cast<ShapedType>();
-
-      if (type.getShape() == resultTy.getShape()) {
-        operands2.push_back(operand);
-        indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
-        continue;
+  for (auto arg : operation->getOperands()) {
+    auto operandTy = arg.getType().cast<ShapedType>();
+    for (int i = 0; i < operandTy.getRank(); i++) {
+      if (operandTy.isDynamicDim(i) && !dynDims[i]) {
+        dynDims[i] = rewriter.create<tensor::DimOp>(loc, arg, i);
       }
+    }
+  }
 
-      // this is for the result
-      SmallVector<int64_t, 5> newShape;
-      SmallVector<AffineExpr, 4> affineExprs;
-      newShape.reserve(type.getRank());
-      for (const auto &it : llvm::enumerate(type.getShape())) {
-        if (it.value() == resultTy.getDimSize(it.index())) {
-          newShape.push_back(it.value());
-          affineExprs.push_back(
-              mlir::getAffineDimExpr(it.index(), rewriter.getContext()));
+  SmallVector<Value> filteredDims = condenseValues(dynDims);
+
+  for (auto result : results) {
+    auto resultTy = result.getType().template cast<ShapedType>();
+    initTensors.push_back(rewriter.create<linalg::InitTensorOp>(
+        loc, filteredDims, resultTy.getShape(), resultTy.getElementType()));
+    opResultTypes.push_back(result.getType());
+  }
+
+  auto bodyResultTypes = llvm::to_vector<4>(llvm::map_range(
+      initTensors, [](Value v) { return getElementTypeOrSelf(v); }));
+
+  SmallVector<Value, 2> operands;
+  SmallVector<AffineMap, 2> indexingMaps;
+  indexingMaps.reserve(operation->getNumOperands() + bodyResultTypes.size());
+
+  // Input indexing maps may be broadcasted.
+  for (Value operand : operation->getOperands()) {
+    ShapedType type = operand.getType().cast<ShapedType>();
+
+    if (type.getShape() == resultTy.getShape()) {
+      operands.push_back(operand);
+      indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
+      continue;
+    }
+
+    SmallVector<int64_t, 5> newShape;
+    SmallVector<AffineExpr, 4> affineExprs;
+    newShape.reserve(type.getRank());
+    for (const auto &it : llvm::enumerate(type.getShape())) {
+      if (it.value() == resultTy.getDimSize(it.index())) {
+        newShape.push_back(it.value());
+        affineExprs.push_back(
+            mlir::getAffineDimExpr(it.index(), rewriter.getContext()));
+      }
+    }
+
+    assert(newShape.size () == rank &&
+          "New shape must have the same rank.");
+
+    operands.push_back(operand);
+    indexingMaps.push_back(AffineMap::get(
+        /*dimCount=*/type.getRank(), /*symbolCount=*/0, affineExprs,
+        rewriter.getContext()));
+  }
+
+  indexingMaps.append(operation->getNumResults(),
+                      rewriter.getMultiDimIdentityMap(rank));
+
+  bool didEncounterError = false;
+  auto linalgOp = rewriter.create<linalg::GenericOp>(
+      loc, opResultTypes, operands, initTensors, indexingMaps,
+      getNParallelLoopsAttrs(rank),
+      [&](OpBuilder &nestedBuilder, Location nestedLoc, ValueRange blockArgs) {
+        Value opResult = createLinalgBodyCalculationForElementwiseOp <SrcOp> (
+            operation, blockArgs.take_front(operation->getNumOperands()),
+            bodyResultTypes, rewriter);
+        if (!opResult) {
+          didEncounterError = true;
+          return;
         }
-      }
+        nestedBuilder.create<linalg::YieldOp>(loc, opResult);
+      });
 
-      assert(newShape.size() == rank && "New shape must have same rank");
+  if (didEncounterError)
+    return failure();
 
-      operands2.push_back(operand);
-      indexingMaps.push_back(AffineMap::get(
-          /*dimCount=*/type.getRank(), /*symbolCount=*/0, affineExprs,
-          rewriter.getContext()));
-    }
-
-    indexingMaps.push_back(rewriter.getMultiDimIdentityMap(rank));
-    bool didEncounterError = false;
-    auto linalgOp = rewriter.create<linalg::GenericOp>(
-        loc, opResultTypes, operands2, initTensors, indexingMaps,
-        getNParallelLoopsAttrs(rank),
-        [&](OpBuilder &nestedBuilder, Location nestedLoc,
-            ValueRange blockArgs) {
-          Value opResult = createLinalgBodyCalculationForElementwiseOp<SrcOp>(
-              op, blockArgs.take_front(op->getNumOperands()), bodyResultTypes,
-              rewriter);
-          if (!opResult) {
-            didEncounterError = true;
-            return;
-          }
-          nestedBuilder.create<linalg::YieldOp>(loc, opResult);
-        });
-
-    assert(!didEncounterError && "Must not encounter errors");
-
-    rewriter.replaceOp(op, linalgOp->getResults());
-    return success ();
+  rewriter.replaceOp(operation, linalgOp->getResults());
+  return success();
 }
 
 namespace {
@@ -181,14 +191,14 @@ namespace {
 struct MyPass : public MyPassBase<MyPass> {
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<linalg::LinalgDialect>();
+    registry.insert<linalg::LinalgDialect, tensor::TensorDialect>();
   }
 
   void runOnOperation() override {
     Operation *op = getOperation();
     MLIRContext *ctx = op->getContext();
     ConversionTarget target(*ctx);
-    target.addLegalDialect<ArithmeticDialect, LinalgDialect>();
+    target.addLegalDialect<ArithmeticDialect, LinalgDialect, TensorDialect>();
 
     target.addDynamicallyLegalOp<AddFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
@@ -321,7 +331,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<CeilDivUIOp>>(ctx);
     patterns.add<PointwiseConverter<CmpFOp>>(ctx);
     patterns.add<PointwiseConverter<CmpIOp>>(ctx);
-    // constant
+    // constant: Implemented by someone else
     patterns.add<PointwiseConverter<DivFOp>>(ctx);
     patterns.add<PointwiseConverter<DivSIOp>>(ctx);
     patterns.add<PointwiseConverter<DivUIOp>>(ctx);
@@ -355,7 +365,7 @@ struct MyPass : public MyPassBase<MyPass> {
     patterns.add<PointwiseConverter<TruncIOp>>(ctx);
     patterns.add<PointwiseConverter<UIToFPOp>>(ctx);
     patterns.add<PointwiseConverter<XOrIOp>>(ctx);
-    // select
+    // select: Implemented by someone else
 
     if (failed(applyPartialConversion(op, target, std::move(patterns)))) {
       signalPassFailure();
