@@ -8,14 +8,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
+#include "mlir/Conversion/ArithmeticToLinalg/ArithmeticToLinalg.h"
+#include "../PassDetail.h"
+#include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Dialect/Arithmetic/IR/Arithmetic.h"
-#include "mlir/Dialect/Arithmetic/Transforms/Passes.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/TypeUtilities.h"
-#include "mlir/Transforms/DialectConversion.h"
 
 using namespace mlir;
 using namespace mlir::arith;
@@ -241,7 +241,7 @@ struct PointwiseConverter : public OpRewritePattern <SrcOp> {
 } // namespace
 
 namespace {
-struct MyPass : public MyPassBase<MyPass> {
+struct ConvertArithmeticToLinalgPass : public ConvertArithmeticToLinalgBase<ConvertArithmeticToLinalgPass> {
 
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<linalg::LinalgDialect, tensor::TensorDialect, cf::ControlFlowDialect>();
@@ -427,6 +427,6 @@ struct MyPass : public MyPassBase<MyPass> {
 };
 } // end anonymous namespace
 
-std::unique_ptr<Pass> mlir::arith::createMyPass() {
-  return std::make_unique<MyPass>();
+std::unique_ptr<Pass> mlir::arith::createConvertArithmeticToLinalgPass() {
+  return std::make_unique<ConvertArithmeticToLinalgPass>();
 }

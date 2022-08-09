@@ -1,4 +1,4 @@
-// RUN: mlir-opt -my-pass -canonicalize %s | FileCheck %s
+// RUN: mlir-opt -convert-arith-to-linalg -canonicalize %s | FileCheck %s
 
 module {
   func.func @transformaddf(%arg0: tensor<4x4xf32>, %arg1: tensor<4x4xf32>) -> tensor<4x4xf32> {

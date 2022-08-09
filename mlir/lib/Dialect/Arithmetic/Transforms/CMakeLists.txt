@@ -3,7 +3,6 @@ add_mlir_dialect_library(MLIRArithmeticTransforms
   Bufferize.cpp
   ExpandOps.cpp
   UnsignedWhenEquivalent.cpp
-  MyPass.cpp
 
   ADDITIONAL_HEADER_DIRS
   {$MLIR_MAIN_INCLUDE_DIR}/mlir/Dialect/Arithmetic/Transforms
