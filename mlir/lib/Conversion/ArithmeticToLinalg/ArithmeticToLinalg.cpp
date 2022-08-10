@@ -1,6 +1,4 @@
-//===- UnsignedWhenEquivalent.cpp - Pass to replace signed operations with
-// unsigned
-// ones when all their arguments and results are statically non-negative --===//
+//===- ArithmeticToLinalg.cpp - Arithmetic to Linalg dialect conversion ---===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
