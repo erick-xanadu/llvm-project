@@ -102,7 +102,12 @@ def ConvertArithmeticToLinalg : Pass<"convert-arith-to-linalg"> {
     This pass converts supported Arithmetic ops to Linalg dialect instructions.
   }];
   let constructor = "mlir::arith::createConvertArithmeticToLinalgPass()";
-  let dependentDialects = ["arith::ArithmeticDialect", "cf::ControlFlowDialect", "linalg::LinalgDialect", "tensor::TensorDialect"];
+  let dependentDialects = [
+    "arith::ArithmeticDialect",
+    "cf::ControlFlowDialect",
+    "linalg::LinalgDialect",
+    "tensor::TensorDialect"
+  ];
   let options = [];
 }
 
