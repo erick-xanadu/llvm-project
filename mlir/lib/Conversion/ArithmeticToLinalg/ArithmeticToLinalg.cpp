@@ -40,13 +40,11 @@ createLinalgBodyCalculationForElementwiseOp(Operation *op, ValueRange args,
                                             PatternRewriter &rewriter) {
   Location loc = op->getLoc();
 
-  if (isa<arith::CmpFOp>(op))
-  {
-    CmpFOp cmp= cast<arith::CmpFOp> (op);
+  if (isa<arith::CmpFOp>(op)) {
+    CmpFOp cmp = cast<arith::CmpFOp>(op);
     return rewriter.create<CmpFOp>(loc, cmp.getPredicate(), args[0], args[1]);
-  } else if (isa<arith::CmpIOp>(op))
-  {
-    CmpIOp cmp = cast<arith::CmpIOp> (op);
+  } else if (isa<arith::CmpIOp>(op)) {
+    CmpIOp cmp = cast<arith::CmpIOp>(op);
     return rewriter.create<CmpIOp>(loc, cmp.getPredicate(), args[0], args[1]);
   }
 
@@ -88,35 +86,37 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
   SmallVector<Value> dynDims;
   dynDims.resize(results.front().getType().cast<ShapedType>().getRank());
 
-  assert (operation->getOperand (0) && "There must be at least one operand.");
-  auto arg0 = operation->getOperand (0);
-  auto arg0Rank = arg0.getType().cast<ShapedType>().getRank ();
-  for (auto arg : operation->getOperands ())
-  {
-    auto operandRank = arg.getType().cast<ShapedType>().getRank ();
-    assert (arg0Rank == operandRank && "All operands must match in rank.");
+  assert(operation->getOperand(0) && "There must be at least one operand.");
+  auto arg0 = operation->getOperand(0);
+  auto arg0Rank = arg0.getType().cast<ShapedType>().getRank();
+  for (auto arg : operation->getOperands()) {
+    auto operandRank = arg.getType().cast<ShapedType>().getRank();
+    assert(arg0Rank == operandRank && "All operands must match in rank.");
   }
 
   for (int i = 0; i < arg0Rank; i++) {
     bool isCurrentDimensionDynamic = false;
-    for (auto arg: operation->getOperands ()) {
+    for (auto arg : operation->getOperands()) {
       auto operandTy = arg.getType().cast<ShapedType>();
-      isCurrentDimensionDynamic |= operandTy.isDynamicDim (i);
+      isCurrentDimensionDynamic |= operandTy.isDynamicDim(i);
     }
 
     // Either operand could be dynamic
     if (isCurrentDimensionDynamic) {
       // We need to create a constant integer index
       // that will allow us to use the DimOp operator...
-      auto indexVal = rewriter.create<arith::ConstantOp> (loc, rewriter.getIndexType (), rewriter.getIntegerAttr(rewriter.getIndexType (), i));
+      auto indexVal = rewriter.create<arith::ConstantOp>(
+          loc, rewriter.getIndexType(),
+          rewriter.getIntegerAttr(rewriter.getIndexType(), i));
       SmallVector<Value> dimensionsToCompare;
-      dimensionsToCompare.resize (operation->getNumOperands ());
+      dimensionsToCompare.resize(operation->getNumOperands());
 
       // Which are the dimensions to compare?
       unsigned int j = 0;
-      for (auto arg: operation->getOperands ()) {
-        dimensionsToCompare[j] = rewriter.create<tensor::DimOp>(loc, arg, indexVal);
-	j++;
+      for (auto arg : operation->getOperands()) {
+        dimensionsToCompare[j] =
+            rewriter.create<tensor::DimOp>(loc, arg, indexVal);
+        j++;
       }
 
       // Get the zeroth dimension size
@@ -130,12 +130,14 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
         dynDims[i] = zerothDimensionToCompare;
       }
 
-      for (; j < operation->getNumOperands (); j++)
-      {
+      for (; j < operation->getNumOperands(); j++) {
         auto jthDimensionToCompare = dimensionsToCompare[j];
-        auto value = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, zerothDimensionToCompare, jthDimensionToCompare);
-        rewriter.create<mlir::cf::AssertOp>(loc, value, rewriter.getStringAttr(
-			                          "Dimensions have to be same size."));
+        auto value = rewriter.create<arith::CmpIOp>(
+            loc, arith::CmpIPredicate::eq, zerothDimensionToCompare,
+            jthDimensionToCompare);
+        rewriter.create<mlir::cf::AssertOp>(
+            loc, value,
+            rewriter.getStringAttr("Dimensions have to be same size."));
       }
     }
   }
@@ -177,8 +179,7 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
       }
     }
 
-    assert(newShape.size () == rank &&
-          "New shape must have the same rank.");
+    assert(newShape.size() == rank && "New shape must have the same rank.");
 
     operands.push_back(operand);
     indexingMaps.push_back(AffineMap::get(
@@ -194,7 +195,7 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
       loc, opResultTypes, operands, initTensors, indexingMaps,
       getNParallelLoopsAttrs(rank),
       [&](OpBuilder &nestedBuilder, Location nestedLoc, ValueRange blockArgs) {
-        Value opResult = createLinalgBodyCalculationForElementwiseOp <SrcOp> (
+        Value opResult = createLinalgBodyCalculationForElementwiseOp<SrcOp>(
             operation, blockArgs.take_front(operation->getNumOperands()),
             bodyResultTypes, rewriter);
         if (!opResult) {
@@ -213,35 +214,37 @@ elementwiseMatchAndRewriteHelper(Operation *operation,
 
 namespace {
 template <typename SrcOp>
-struct PointwiseConverter : public OpRewritePattern <SrcOp> {
+struct PointwiseConverter : public OpRewritePattern<SrcOp> {
 
   using OpRewritePattern<SrcOp>::OpRewritePattern;
 
-
-  LogicalResult matchAndRewrite(SrcOp op, 
-               PatternRewriter &rewriter) const final {
+  LogicalResult matchAndRewrite(SrcOp op,
+                                PatternRewriter &rewriter) const final {
 
     bool hasTensorResult = any_of(op->getResultTypes(), isaTensor);
     if (!hasTensorResult)
-	    return failure ();
+      return failure();
 
-    return elementwiseMatchAndRewriteHelper<SrcOp> (op, rewriter);
+    return elementwiseMatchAndRewriteHelper<SrcOp>(op, rewriter);
   }
 };
 } // namespace
 
 namespace {
-struct ConvertArithmeticToLinalgPass : public ConvertArithmeticToLinalgBase<ConvertArithmeticToLinalgPass> {
+struct ConvertArithmeticToLinalgPass
+    : public ConvertArithmeticToLinalgBase<ConvertArithmeticToLinalgPass> {
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<linalg::LinalgDialect, tensor::TensorDialect, cf::ControlFlowDialect>();
+    registry.insert<linalg::LinalgDialect, tensor::TensorDialect,
+                    cf::ControlFlowDialect>();
   }
 
   void runOnOperation() override {
     Operation *op = getOperation();
     MLIRContext *ctx = op->getContext();
     ConversionTarget target(*ctx);
-    target.addLegalDialect<ArithmeticDialect, LinalgDialect, TensorDialect, ControlFlowDialect>();
+    target.addLegalDialect<ArithmeticDialect, LinalgDialect, TensorDialect,
+                           ControlFlowDialect>();
 
     target.addDynamicallyLegalOp<AddFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
