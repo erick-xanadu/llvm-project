@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef MLIR_CONVERSION_ARITHMETICTOLLVM_ARITHMETICTOLINALG_H
-#define MLIR_CONVERSION_ARITHMETICTOLLVM_ARITHMETICTOLINALG_H
+#ifndef MLIR_CONVERSION_ARITHMETICTOLINALG_ARITHMETICTOLINALG_H
+#define MLIR_CONVERSION_ARITHMETICTOLINALG_ARITHMETICTOLINALG_H
 
 #include <memory>
 
@@ -22,4 +22,4 @@ std::unique_ptr<Pass> createConvertArithmeticToLinalgPass();
 } // namespace arith
 } // namespace mlir
 
-#endif // MLIR_CONVERSION_ARITHMETICTOLLVM_ARITHMETICTOLLVM_H
+#endif // MLIR_CONVERSION_ARITHMETICTOLINALG_ARITHMETICTOLINALG_H
