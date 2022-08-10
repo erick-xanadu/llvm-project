@@ -258,6 +258,7 @@ struct ConvertArithmeticToLinalgPass
     target.addDynamicallyLegalOp<BitcastOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    // ConstantOp : Bufferization is achieved through BufferizableOpInterface
     target.addDynamicallyLegalOp<CeilDivSIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -297,6 +298,7 @@ struct ConvertArithmeticToLinalgPass
     target.addDynamicallyLegalOp<FloorDivSIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    // IndexCastOp: Bufferization is achieved through BufferizableOpInterface
     target.addDynamicallyLegalOp<MaxFOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -339,6 +341,7 @@ struct ConvertArithmeticToLinalgPass
     target.addDynamicallyLegalOp<SIToFPOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
+    // SelectOp: Bufferization is achieved through BufferizableOpInterface
     target.addDynamicallyLegalOp<ShLIOp>([&](Operation *op) {
       return !any_of(op->getResultTypes(), isaTensor);
     });
@@ -377,7 +380,7 @@ struct ConvertArithmeticToLinalgPass
     patterns.add<PointwiseConverter<CeilDivUIOp>>(ctx);
     patterns.add<PointwiseConverter<CmpFOp>>(ctx);
     patterns.add<PointwiseConverter<CmpIOp>>(ctx);
-    // constant: Implemented by someone else
+    // ConstantOp : Bufferization is achieved through BufferizableOpInterface
     patterns.add<PointwiseConverter<DivFOp>>(ctx);
     patterns.add<PointwiseConverter<DivSIOp>>(ctx);
     patterns.add<PointwiseConverter<DivUIOp>>(ctx);
@@ -387,7 +390,7 @@ struct ConvertArithmeticToLinalgPass
     patterns.add<PointwiseConverter<FPToSIOp>>(ctx);
     patterns.add<PointwiseConverter<FPToUIOp>>(ctx);
     patterns.add<PointwiseConverter<FloorDivSIOp>>(ctx);
-    // index cast: Implemented by someone else
+    // IndexCastOp: Bufferization is achieved through BufferizableOpInterface
     patterns.add<PointwiseConverter<MaxFOp>>(ctx);
     patterns.add<PointwiseConverter<MaxSIOp>>(ctx);
     patterns.add<PointwiseConverter<MaxUIOp>>(ctx);
@@ -402,6 +405,7 @@ struct ConvertArithmeticToLinalgPass
     patterns.add<PointwiseConverter<RemSIOp>>(ctx);
     patterns.add<PointwiseConverter<RemUIOp>>(ctx);
     patterns.add<PointwiseConverter<SIToFPOp>>(ctx);
+    // SelectOp: Bufferization is achieved through BufferizableOpInterface
     patterns.add<PointwiseConverter<ShLIOp>>(ctx);
     patterns.add<PointwiseConverter<ShRSIOp>>(ctx);
     patterns.add<PointwiseConverter<ShRUIOp>>(ctx);
@@ -411,7 +415,6 @@ struct ConvertArithmeticToLinalgPass
     patterns.add<PointwiseConverter<TruncIOp>>(ctx);
     patterns.add<PointwiseConverter<UIToFPOp>>(ctx);
     patterns.add<PointwiseConverter<XOrIOp>>(ctx);
-    // select: Implemented by someone else
 
     if (failed(applyPartialConversion(op, target, std::move(patterns)))) {
       signalPassFailure();
